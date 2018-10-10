@@ -319,9 +319,9 @@ validateStatementIndentation
   -> ValidateIndentation e (Statement (Nub (Indentation ': v)) a)
 validateStatementIndentation (CompoundStatement c) =
   CompoundStatement <$> validateCompoundStatementIndentation c
-validateStatementIndentation (SmallStatements idnt a b c d e) =
+validateStatementIndentation (SmallStatements idnt a b c d) =
   (\idnt' ->
-     SmallStatements idnt' (unsafeCoerce a) (over (mapped._2) unsafeCoerce b) c d e) <$>
+     SmallStatements idnt' (unsafeCoerce a) (over (mapped._2) unsafeCoerce b) c d) <$>
   checkIndent idnt
 
 validateModuleIndentation

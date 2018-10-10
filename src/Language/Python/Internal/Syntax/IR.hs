@@ -43,7 +43,6 @@ data Statement a
       [([Whitespace], SmallStatement a)]
       (Maybe [Whitespace])
       (Maybe (Comment a))
-      (Maybe Newline)
   | CompoundStatement
       (CompoundStatement a)
   deriving (Eq, Show, Functor, Foldable, Traversable)
@@ -787,8 +786,8 @@ fromIR_compIf (CompIf a b c) =
 fromIR_statement :: Statement a -> Validation (NonEmpty (IRError a)) (Syntax.Statement '[] a)
 fromIR_statement ex =
   case ex of
-    SmallStatements a b c d e f ->
-      (\b' c' -> Syntax.SmallStatements a b' c' d e f) <$>
+    SmallStatements a b c d e ->
+      (\b' c' -> Syntax.SmallStatements a b' c' d e) <$>
       fromIR_smallStatement b <*>
       traverseOf (traverse._2) fromIR_smallStatement c
     CompoundStatement a ->

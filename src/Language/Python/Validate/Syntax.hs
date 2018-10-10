@@ -923,8 +923,8 @@ validateStatementSyntax
 validateStatementSyntax (CompoundStatement c) =
   liftVM1 (local $ inFinally .~ False) $
   CompoundStatement <$> validateCompoundStatementSyntax c
-validateStatementSyntax (SmallStatements idnts s ss sc cmt nl) =
-  (\s' ss' -> SmallStatements idnts s' ss' sc cmt nl) <$>
+validateStatementSyntax (SmallStatements idnts s ss sc cmt) =
+  (\s' ss' -> SmallStatements idnts s' ss' sc cmt) <$>
   validateSmallStatementSyntax s <*>
   traverseOf (traverse._2) validateSmallStatementSyntax ss
 

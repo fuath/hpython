@@ -897,10 +897,9 @@ statement pIndent indentBefore =
   -- is actually an identifier and we'll have to backtrack
   CompoundStatement <$> compoundStatement pIndent indentBefore <|>
 
-  (\(a, b, c) d -> SmallStatements indentBefore a b c d) <$>
+  (\(a, b, c) -> SmallStatements indentBefore a b c) <$>
   sepBy1' smallStatement (snd <$> semicolon space) <*>
-  optional comment <*>
-  optional eol
+  optional comment
 
 suite :: MonadParsec e PyTokens m => m (Suite SrcInfo)
 suite =

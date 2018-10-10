@@ -380,7 +380,7 @@ class AsLine s where
 
 instance AsLine SmallStatement where
   line_ ss =
-    Line . Right $ SmallStatements (Indents [] ()) ss [] Nothing Nothing (Just LF)
+    Line . Right $ SmallStatements (Indents [] ()) ss [] Nothing Nothing
 
 instance AsLine CompoundStatement where
   line_ = Line . Right . CompoundStatement
@@ -617,7 +617,7 @@ mkGetBody
 mkGetBody thing bodyField indentsField code =
   (\case
       SuiteOne _ _ c d ->
-        [ line_ $ SmallStatements (Indents [] ()) c [] Nothing d Nothing ]
+        [ line_ $ SmallStatements (Indents [] ()) c [] Nothing d ]
       SuiteMany _ _ _ _ d ->
         case d of
           Block x y z -> fmap (Line . Left) x <> (Line (Right y) : fmap Line z)) $
@@ -721,10 +721,10 @@ call_ expr args =
 
 return_ :: Raw Expr -> Raw Statement
 return_ e =
-  SmallStatements (Indents [] ()) (Return () [Space] $ Just e) [] Nothing Nothing (Just LF)
+  SmallStatements (Indents [] ()) (Return () [Space] $ Just e) [] Nothing Nothing
 
 expr_ :: Raw Expr -> Raw Statement
-expr_ e = SmallStatements (Indents [] ()) (Expr () e) [] Nothing Nothing (Just LF)
+expr_ e = SmallStatements (Indents [] ()) (Expr () e) [] Nothing Nothing
 
 -- |
 -- >>> list_ [li_ $ var_ "a"]
@@ -1087,7 +1087,7 @@ int_ :: Integer -> Raw Expr
 int_ = fromInteger
 
 pass_ :: Raw Statement
-pass_ = SmallStatements (Indents [] ()) (Pass () []) [] Nothing Nothing (Just LF)
+pass_ = SmallStatements (Indents [] ()) (Pass () []) [] Nothing Nothing
 
 -- | Create a minimal valid 'Elif'
 mkElif :: Raw Expr -> [Raw Line] -> Raw Elif
@@ -1156,7 +1156,7 @@ instance HasElse If where
   setElse = mkSetElse _ifIndents ifElse
 
 break_ :: Raw Statement
-break_ = SmallStatements (Indents [] ()) (Break () []) [] Nothing Nothing (Just LF)
+break_ = SmallStatements (Indents [] ()) (Break () []) [] Nothing Nothing
 
 true_ :: Raw Expr
 true_ = Bool () True []
@@ -1188,7 +1188,6 @@ mkAugAssign as a b =
     []
     Nothing
     Nothing
-    (Just LF)
 
 -- | Chained assignment
 --
@@ -1206,7 +1205,6 @@ chainEq t (a:as) =
     []
     Nothing
     Nothing
-    (Just LF)
 
 (.=) :: Raw Expr -> Raw Expr -> Raw Statement
 (.=) a b =
@@ -1216,7 +1214,6 @@ chainEq t (a:as) =
     []
     Nothing
     Nothing
-    (Just LF)
 infix 0 .=
 
 (.+=) :: Raw Expr -> Raw Expr -> Raw Statement

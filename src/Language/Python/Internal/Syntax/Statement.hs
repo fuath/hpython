@@ -143,26 +143,22 @@ data Statement (v :: [*]) a
       [([Whitespace], SmallStatement v a)]
       (Maybe [Whitespace])
       (Maybe (Comment a))
-      (Maybe Newline)
   | CompoundStatement
       (CompoundStatement v a)
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance HasExprs Statement where
-  _Exprs f (SmallStatements idnt s ss a b c) =
-    SmallStatements idnt <$>
+  _Exprs f (SmallStatements idnt s ss a b) =
+    (\s' ss' -> SmallStatements idnt s' ss' a b) <$>
     _Exprs f s <*>
-    (traverse._2._Exprs) f ss <*>
-    pure a <*>
-    pure b <*>
-    pure c
+    (traverse._2._Exprs) f ss
   _Exprs f (CompoundStatement c) = CompoundStatement <$> _Exprs f c
 
 instance HasBlocks Statement where
   _Blocks f (CompoundStatement c) = CompoundStatement <$> _Blocks f c
-  _Blocks _ (SmallStatements idnt a b c d e) =
+  _Blocks _ (SmallStatements idnt a b c d) =
     pure $
-    SmallStatements idnt (a ^. unvalidated) (over (mapped._2) (view unvalidated) b) c d e
+    SmallStatements idnt (a ^. unvalidated) (over (mapped._2) (view unvalidated) b) c d
 
 instance Plated (Statement '[] a) where
   plate _ s@SmallStatements{} = pure s

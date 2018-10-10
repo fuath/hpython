@@ -946,8 +946,7 @@ genStatement =
       (\a c -> SmallStatements a st sts c) <$>
       use currentIndentation <*>
       Gen.maybe genWhitespaces <*>
-      Gen.maybe genComment <*>
-      (Just <$> genNewline)
+      Gen.maybe genComment
     ]
     [ CompoundStatement <$> localState genCompoundStatement ]
 

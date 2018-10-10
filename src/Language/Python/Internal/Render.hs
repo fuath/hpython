@@ -1194,7 +1194,7 @@ renderIndent (MkIndent ws) = foldMap renderWhitespace $ toList ws
 
 renderStatement :: Statement v a -> RenderOutput
 renderStatement (CompoundStatement c) = renderCompoundStatement c
-renderStatement (SmallStatements idnts s ss sc cmt nl) =
+renderStatement (SmallStatements idnts s ss sc cmt) =
   renderIndents idnts <>
   renderSmallStatement s <>
   foldMap
@@ -1206,8 +1206,7 @@ renderStatement (SmallStatements idnts s ss sc cmt nl) =
   foldMap
     (\b -> TkSemicolon () `cons` foldMap renderWhitespace b)
     sc <>
-  foldMap renderComment cmt <>
-  foldMap (singleton . renderNewline) nl
+  foldMap renderComment cmt
 
 renderExceptAs :: ExceptAs v a -> RenderOutput
 renderExceptAs (ExceptAs _ e f) =

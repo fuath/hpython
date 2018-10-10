@@ -42,7 +42,6 @@ append_to =
          []
          Nothing
          Nothing
-         (Just LF)
      )
      [ Right $
          SmallStatements
@@ -51,7 +50,6 @@ append_to =
            []
            Nothing
            Nothing
-           (Just LF)
      ])
 
 -- |
