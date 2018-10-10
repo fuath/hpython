@@ -318,7 +318,7 @@ instance HasIndents Block where
   _Indents = _Statements._Indents
 
 instance HasIndents Suite where
-  _Indents _ (SuiteOne a b c d e) = pure $ SuiteOne a b c d e
+  _Indents _ (SuiteOne a b c d) = pure $ SuiteOne a b c d
   _Indents f (SuiteMany a b c d e) = SuiteMany a b c d <$> _Indents f e
 
 instance HasIndents Decorator where
@@ -426,7 +426,7 @@ instance HasNewlines Block where
     (traverse._Right._Newlines) f c
 
 instance HasNewlines Suite where
-  _Newlines fun (SuiteOne a b d e f) = SuiteOne a b d e <$> fun f
+  _Newlines _ (SuiteOne a b c d) = pure $ SuiteOne a b c d
   _Newlines f (SuiteMany a b c d e) = SuiteMany a b c <$> f d <*> _Newlines f e
 
 instance HasNewlines Decorator where

@@ -168,8 +168,8 @@ validateSuiteScope
   => Suite v a
   -> ValidateScope a e (Suite (Nub (Scope ': v)) a)
 validateSuiteScope (SuiteMany ann a b c d) = SuiteMany ann a b c <$> validateBlockScope d
-validateSuiteScope (SuiteOne ann a b c d) =
-  (\b' -> SuiteOne ann a b' c d) <$>
+validateSuiteScope (SuiteOne ann a b c) =
+  (\b' -> SuiteOne ann a b' c) <$>
   validateSmallStatementScope b
 
 validateDecoratorScope

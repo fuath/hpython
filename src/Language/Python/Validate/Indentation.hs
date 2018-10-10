@@ -170,7 +170,7 @@ validateSuiteIndentation idnt (SuiteMany ann a b c d) =
   SuiteMany ann a b c <$
   setNextIndent GreaterThan (idnt ^. indentsValue) <*>
   validateBlockIndentation d
-validateSuiteIndentation _ (SuiteOne ann a b c d) = pure $ SuiteOne ann a (unsafeCoerce b) c d
+validateSuiteIndentation _ (SuiteOne ann a b c) = pure $ SuiteOne ann a (unsafeCoerce b) c
 
 validateExprIndentation
   :: AsIndentationError e v a

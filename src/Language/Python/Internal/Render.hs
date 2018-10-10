@@ -1066,12 +1066,11 @@ renderSuite (SuiteMany _ a b c d) =
   foldMap renderComment b <>
   singleton (renderNewline c) <>
   renderBlock d
-renderSuite (SuiteOne _ a b c d) =
+renderSuite (SuiteOne _ a b c) =
   TkColon () `cons`
   foldMap renderWhitespace a <>
   renderSmallStatement b <>
-  foldMap renderComment c <>
-  singleton (renderNewline d)
+  foldMap renderComment c
 
 renderDecorator :: Decorator v a -> RenderOutput
 renderDecorator (Decorator _ a b c d e) =

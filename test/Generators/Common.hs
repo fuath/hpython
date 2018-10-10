@@ -29,8 +29,7 @@ genSuite gss gb =
   , SuiteOne () <$>
     genWhitespaces <*>
     gss <*>
-    Gen.maybe genComment <*>
-    genNewline
+    Gen.maybe genComment
   ]
 
 genUnOp :: MonadGen m => m (UnOp ())

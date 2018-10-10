@@ -534,7 +534,7 @@ exprAnn =
 
 data Suite a
   -- ':' <space> smallstatement
-  = SuiteOne a [Whitespace] (SmallStatement a) (Maybe (Comment a)) Newline
+  = SuiteOne a [Whitespace] (SmallStatement a) (Maybe (Comment a))
   | SuiteMany a
       -- ':' <spaces> [comment] <newline>
       [Whitespace] (Maybe (Comment a)) Newline
@@ -692,8 +692,8 @@ fromIR_expr ex =
 fromIR_suite :: Suite a -> Validation (NonEmpty (IRError a)) (Syntax.Suite '[] a)
 fromIR_suite s =
   case s of
-    SuiteOne a b c d e ->
-      (\c' -> Syntax.SuiteOne a b c' d e) <$>
+    SuiteOne a b c d ->
+      (\c' -> Syntax.SuiteOne a b c' d) <$>
       fromIR_smallStatement c
     SuiteMany a b c d e ->
       Syntax.SuiteMany a b c d <$>

@@ -86,7 +86,7 @@ class HasBlocks s where
   _Blocks :: Traversal (s v a) (s '[] a) (Block v a) (Block '[] a)
 
 instance HasBlocks Suite where
-  _Blocks _ (SuiteOne a b c d e) = pure $ SuiteOne a b (c ^. unvalidated) d e
+  _Blocks _ (SuiteOne a b c d) = pure $ SuiteOne a b (c ^. unvalidated) d
   _Blocks f (SuiteMany a b c d e) = SuiteMany a b c d <$> f e
 
 instance HasBlocks CompoundStatement where
@@ -133,7 +133,7 @@ instance HasStatements Block where
     Block a <$> f b <*> (traverse._Right) f c
 
 instance HasStatements Suite where
-  _Statements _ (SuiteOne a b c d e) = pure $ SuiteOne a b (c ^. unvalidated) d e
+  _Statements _ (SuiteOne a b c d) = pure $ SuiteOne a b (c ^. unvalidated) d
   _Statements f (SuiteMany a b c d e) = SuiteMany a b c d <$> _Statements f e
 
 data Statement (v :: [*]) a
@@ -256,7 +256,7 @@ data ExceptAs (v :: [*]) a
 
 data Suite (v :: [*]) a
   -- ':' <space> smallstatement
-  = SuiteOne a [Whitespace] (SmallStatement v a) (Maybe (Comment a)) Newline
+  = SuiteOne a [Whitespace] (SmallStatement v a) (Maybe (Comment a))
   | SuiteMany a
       -- ':' <spaces> [comment] <newline>
       [Whitespace] (Maybe (Comment a)) Newline
@@ -369,7 +369,7 @@ instance HasExprs Block where
     Block a <$> _Exprs f b <*> (traverse._Right._Exprs) f c
 
 instance HasExprs Suite where
-  _Exprs f (SuiteOne a b c d e) = (\c' -> SuiteOne a b c' d e) <$> _Exprs f c
+  _Exprs f (SuiteOne a b c d) = (\c' -> SuiteOne a b c' d) <$> _Exprs f c
   _Exprs f (SuiteMany a b c d e) = SuiteMany a b c d <$> _Exprs f e
 
 instance HasExprs WithItem where

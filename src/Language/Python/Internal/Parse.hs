@@ -906,14 +906,13 @@ suite :: MonadParsec e PyTokens m => m (Suite SrcInfo)
 suite =
   (\(tk, s) ->
      either
-       (\(a, b, c) -> SuiteOne (pyTokenAnn tk) s a b c)
-       (\(a, b,c ) -> SuiteMany (pyTokenAnn tk) s a b c)) <$>
+       (\(a, b) -> SuiteOne (pyTokenAnn tk) s a b)
+       (\(a, b, c) -> SuiteMany (pyTokenAnn tk) s a b c)) <$>
   colon space <*>
   ((fmap Left $
-    (,,) <$>
+    (,) <$>
     smallStatement <*>
-    optional comment <*>
-    eol)
+    optional comment)
 
     <|>
 

@@ -616,8 +616,8 @@ mkGetBody
   -> [Raw Line]
 mkGetBody thing bodyField indentsField code =
   (\case
-      SuiteOne _ _ c d e ->
-        [ line_ $ SmallStatements (Indents [] ()) c [] Nothing d (Just e) ]
+      SuiteOne _ _ c d ->
+        [ line_ $ SmallStatements (Indents [] ()) c [] Nothing d Nothing ]
       SuiteMany _ _ _ _ d ->
         case d of
           Block x y z -> fmap (Line . Left) x <> (Line (Right y) : fmap Line z)) $

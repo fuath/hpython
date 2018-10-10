@@ -551,8 +551,8 @@ validateSuiteSyntax (SuiteMany a b c d e) =
   (\b' -> SuiteMany a b' c d) <$>
   validateWhitespace a b <*>
   validateBlockSyntax e
-validateSuiteSyntax (SuiteOne a b c d e) =
-  (\b' c' -> SuiteOne a b' c' d e) <$>
+validateSuiteSyntax (SuiteOne a b c d) =
+  (\b' c' -> SuiteOne a b' c' d) <$>
   validateWhitespace a b <*>
   validateSmallStatementSyntax c
 
