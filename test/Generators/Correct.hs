@@ -180,26 +180,36 @@ genImportTargets = do
     ]
 
 genBlock :: (MonadGen m, MonadState GenState m) => m (Block '[] ())
-genBlock = doIndent *> go <* doDedent
-  where
-    genBlank =
-      (,,,) () <$>
-      Gen.list (Range.constant 0 10) (Gen.element [Space, Tab]) <*>
+genBlock =
+  doIndent *>
+  sizedRecursive
+    []
+    [ sized2M
+        (\a b ->
+          (\c -> BlockOne a c b) <$> Gen.maybe genComment)
+        genStatement
+        (Gen.maybe $ (,) <$> genNewline <*> sizedMaybe genBlock')
+    , BlockBlank () <$>
+      genWhitespaces <*>
       Gen.maybe genComment <*>
-      genNewline
-
-    genLine =
-      Gen.choice
-        [ Right <$> genStatement
-        , Left <$> genBlank
-        ]
-
-    go =
-      sizedBind genStatement $ \st ->
-      Block <$>
-        Gen.list (Range.constant 0 10) genBlank <*>
-        pure st <*>
-        sizedList genLine
+      genNewline <*>
+      genBlock
+    ] <*
+  doDedent
+  where
+    genBlock' :: (MonadGen m, MonadState GenState m) => m (Block' '[] ())
+    genBlock' =
+      sizedRecursive
+      []
+      [ sized2M
+          (\a b -> (\c -> Block'One a c b) <$> Gen.maybe genComment)
+          genStatement
+          (Gen.maybe $ (,) <$> genNewline <*> sizedMaybe genBlock')
+      , Block'Blank () <$>
+        genWhitespaces <*>
+        Gen.maybe genComment <*>
+        Gen.maybe ((,) <$> genNewline <*> sizedMaybe genBlock')
+      ]
 
 genPositionalArg :: (MonadGen m, MonadState GenState m) => m (Arg '[] ())
 genPositionalArg =

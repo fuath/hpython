@@ -92,16 +92,33 @@ genImportTargets =
 
 genBlock :: MonadGen m => m (Block '[] ())
 genBlock =
-  Block <$>
-  Gen.list
-    (Range.constant 0 10)
-    ((,,,) () <$> genWhitespaces <*> Gen.maybe genComment <*> genNewline) <*>
-  genStatement <*>
-  sizedList
-    (Gen.choice
-     [ Right <$> genStatement
-     , fmap Left $ (,,,) () <$> genWhitespaces <*> Gen.maybe genComment <*> genNewline
-     ])
+  sizedRecursive
+  []
+  [ sized2M
+      (\a b ->
+         (\c -> BlockOne a c b) <$> Gen.maybe genComment)
+      genStatement
+      (Gen.maybe $ (,) <$> genNewline <*> sizedMaybe genBlock')
+  , BlockBlank () <$>
+    genWhitespaces <*>
+    Gen.maybe genComment <*>
+    genNewline <*>
+    genBlock
+  ]
+  where
+    genBlock' :: MonadGen m => m (Block' '[] ())
+    genBlock' =
+      sizedRecursive
+      []
+      [ sized2M
+          (\a b -> (\c -> Block'One a c b) <$> Gen.maybe genComment)
+          genStatement
+          (Gen.maybe $ (,) <$> genNewline <*> sizedMaybe genBlock')
+      , Block'Blank () <$>
+        genWhitespaces <*>
+        Gen.maybe genComment <*>
+        Gen.maybe ((,) <$> genNewline <*> sizedMaybe genBlock')
+      ]
 
 genCompFor :: MonadGen m => m (CompFor '[] ())
 genCompFor =

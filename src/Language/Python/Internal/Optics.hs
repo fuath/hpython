@@ -9,8 +9,9 @@ import Control.Lens.Iso (Iso', iso, from)
 import Control.Lens.Setter ((.~))
 import Control.Lens.Traversal (Traversal, Traversal', traverseOf)
 import Control.Lens.Tuple (_3, _4)
-import Control.Lens.Prism (Prism, _Right, prism)
+import Control.Lens.Prism (Prism, prism)
 import Data.Coerce (coerce)
+import Data.Bitraversable (bitraverse)
 import Data.Function ((&))
 
 import Language.Python.Internal.Optics.Validated (unvalidated)
@@ -418,12 +419,26 @@ instance HasIndents CompoundStatement where
 class HasNewlines s where
   _Newlines :: Traversal' (s v a) Newline
 
+instance HasNewlines Block' where
+  _Newlines f = go
+    where
+      go (Block'One a b c) =
+        (\a' -> Block'One a' b) <$>
+        _Newlines f a <*>
+        traverse (bitraverse f (traverse go)) c
+      go (Block'Blank a b c d) =
+        Block'Blank a b c <$>
+        traverse (bitraverse f (traverse go)) d
+
 instance HasNewlines Block where
-  _Newlines f (Block a b c) =
-    Block <$>
-    (traverse._4) f a <*>
-    _Newlines f b <*>
-    (traverse._Right._Newlines) f c
+  _Newlines f = go
+    where
+      go (BlockOne a b c) =
+        (\a' -> BlockOne a' b) <$>
+        _Newlines f a <*>
+        traverse (bitraverse f ((traverse._Newlines) f)) c
+      go (BlockBlank a b c d e) =
+        BlockBlank a b c <$> f d <*> go e
 
 instance HasNewlines Suite where
   _Newlines _ (SuiteOne a b c d) = pure $ SuiteOne a b c d

@@ -901,44 +901,49 @@ statement pIndent indentBefore =
   sepBy1' smallStatement (snd <$> semicolon space) <*>
   optional comment
 
+block :: MonadParsec e PyTokens m => m (Block SrcInfo)
+block =
+  BlockOne <$>
+  (statement level =<< indent) <*>
+  optional comment <*>
+  optional ((,) <$> eol <*> optional block')
+
+  <|>
+
+  withSrcInfo
+    ((\a b c d e -> BlockBlank e a b c d) <$>
+     many space <*>
+     optional comment <*>
+     eol <*>
+     block)
+  where
+    block' :: MonadParsec e PyTokens m => m (Block' SrcInfo)
+    block' =
+      Block'One <$>
+      (statement level =<< level) <*>
+      optional comment <*>
+      optional ((,) <$> eol <*> optional block')
+
+      <|>
+
+      withSrcInfo
+      ((\a b c d -> Block'Blank d a b c) <$>
+       many space <*>
+       optional comment <*>
+       optional ((,) <$> eol <*> optional block'))
+
 suite :: MonadParsec e PyTokens m => m (Suite SrcInfo)
 suite =
   (\(tk, s) ->
      either
-       (\(a, b) -> SuiteOne (pyTokenAnn tk) s a b)
+       (uncurry $ SuiteOne (pyTokenAnn tk) s)
        (\(a, b, c) -> SuiteMany (pyTokenAnn tk) s a b c)) <$>
   colon space <*>
-  ((fmap Left $
-    (,) <$>
-    smallStatement <*>
-    optional comment)
+  (fmap Left ((,) <$> smallStatement <*> optional comment)
 
-    <|>
+   <|>
 
-   (fmap Right $
-    (,,) <$>
-    optional comment <*>
-    eol <*>
-    (Block <$>
-     many commentOrEmpty <*>
-     (statement level =<< indent) <*>
-     many (line level)) <*
-    dedent))
-  where
-    commentOrEmpty =
-      withSrcInfo $
-      (\b c d a -> (a, b, c, d)) <$>
-      some space <*>
-      optional comment <*>
-      eol
-
-      <|>
-
-      (\b c a -> (a, [], b, c)) <$> optional comment <*> eol
-
-    line i =
-      Left <$> commentOrEmpty <|>
-      Right <$> (statement level =<< i)
+   fmap Right ((,,) <$> optional comment <*> eol <*> block <* dedent))
 
 comma :: MonadParsec e PyTokens m => m Whitespace -> m (PyToken SrcInfo, [Whitespace])
 comma ws = token ws (\case; TkComma{} -> True; _ -> False) ","

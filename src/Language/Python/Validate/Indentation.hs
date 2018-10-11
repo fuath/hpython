@@ -22,11 +22,9 @@ module Language.Python.Validate.Indentation
   )
 where
 
-import Control.Lens.Cons (_head)
-import Control.Lens.Fold ((^?!), folded)
+import Control.Lens.Fold ((^?!))
 import Control.Lens.Getter ((^.))
 import Control.Lens.Iso (from)
-import Control.Lens.Prism (_Right)
 import Control.Lens.Review ((#))
 import Control.Lens.Setter (over, mapped)
 import Control.Lens.Traversal (traverseOf)
@@ -40,7 +38,6 @@ import Data.Type.Set
 import Unsafe.Coerce (unsafeCoerce)
 import Data.Validation (Validation(..))
 import Data.Validate.Monadic (ValidateM(..), liftVM0, errorVM, errorVM1)
-import qualified Data.List.NonEmpty as NonEmpty
 
 import Language.Python.Internal.Optics
 import Language.Python.Internal.Optics.Validated (unvalidated)
@@ -123,43 +120,48 @@ equivalentIndentation (x:xs) (y:ys) =
     (Continued _ _, Continued _ _) -> True
     _ -> False
 
+checkBlankIndents
+  :: AsIndentationError e v a
+  => a
+  -> [Whitespace]
+  -> ValidateIndentation e ()
+checkBlankIndents a b =
+  if any (\case; Continued{} -> True; _ -> False) b
+  then errorVM1 $ _EmptyContinuedLine # a
+  else pure ()
+
 validateBlockIndentation
-  :: forall e v a.
-     AsIndentationError e v a
+  :: AsIndentationError e v a
   => Block v a
   -> ValidateIndentation e (Block (Nub (Indentation ': v)) a)
-validateBlockIndentation (Block x b bs) =
-  (\x' (b' :| bs') ->
-     case b' of
-       Right b'' -> Block x' b'' bs'
-       _ -> error "impossible") <$>
-  traverseOf _head checkBlankIndents x <*>
-  go False (Right b) bs
+validateBlockIndentation (BlockOne a b c) =
+  (\a' -> BlockOne a' b) <$>
+  validateStatementIndentation a <*>
+  traverseOf
+    (traverse._2.traverse)
+    (validateBlock'Indentation $ a ^?! unvalidated._Indents.indentsValue)
+    c
   where
-    checkBlankIndents
-      :: (a, [Whitespace], Maybe (Comment a), Newline)
-      -> ValidateIndentation e (a, [Whitespace], Maybe (Comment a), Newline)
-    checkBlankIndents (a, b, c, d) =
-      if any (\case; Continued{} -> True; _ -> False) b
-      then errorVM1 $ _EmptyContinuedLine # a
-      else pure (a, b, c, d)
-
-    is = (Right b:|bs) ^?! folded._Right.unvalidated._Indents.indentsValue
-
-    go flag (Left e) rest =
-        case rest of
-          [] -> pure . Left <$> checkBlankIndents e
-          r : rs -> NonEmpty.cons . Left <$> checkBlankIndents e <*> go flag r rs
-    go flag (Right st) rest =
-      let
-        validated =
-          Right <$
-          (if flag then setNextIndent EqualTo is else pure ()) <*>
-          validateStatementIndentation st
-      in
-      case rest of
-        [] -> (:| []) <$> validated
-        r : rs -> NonEmpty.cons <$> validated <*> go True r rs
+    validateBlock'Indentation
+      :: AsIndentationError e v a
+      => [Indent]
+      -> Block' v a
+      -> ValidateIndentation e (Block' (Nub (Indentation ': v)) a)
+    validateBlock'Indentation is = go
+      where
+        go (Block'One a b c) =
+          (\a' -> Block'One a' b) <$
+          setNextIndent EqualTo is <*>
+          validateStatementIndentation a <*>
+          traverseOf (traverse._2.traverse) go c
+        go (Block'Blank a b c d) =
+          Block'Blank a b c <$
+          checkBlankIndents a b <*>
+          traverseOf (traverse._2.traverse) go d
+validateBlockIndentation (BlockBlank a b c d e) =
+  BlockBlank a b c d <$
+  checkBlankIndents a b <*>
+  validateBlockIndentation e
 
 validateSuiteIndentation
   :: AsIndentationError e v a

@@ -4,10 +4,9 @@
 {-# language TemplateHaskell #-}
 module Language.Python.Internal.Syntax.IR where
 
-import Control.Lens.Fold (foldMapOf, folded)
 import Control.Lens.Getter ((^.))
 import Control.Lens.Lens (Lens', lens)
-import Control.Lens.Setter ((.~), over, mapped)
+import Control.Lens.Setter ((.~))
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Traversal (traverseOf)
 import Control.Lens.Tuple (_2, _3)
@@ -35,6 +34,31 @@ import qualified Language.Python.Internal.Syntax as Syntax
 
 data IRError a = InvalidUnpacking a
   deriving (Eq, Show)
+
+data Block a
+  = BlockOne
+      (Statement a)
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' a)))
+  | BlockBlank
+      a
+      [Whitespace]
+      (Maybe (Comment a))
+      Newline
+      (Block a)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
+
+data Block' a
+  = Block'One
+      (Statement a)
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' a)))
+  | Block'Blank
+      a
+      [Whitespace]
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' a)))
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 data Statement a
   = SmallStatements
@@ -541,42 +565,6 @@ data Suite a
       (Block a)
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-data Block a
-  = Block
-  { _blockBlankLines :: [(a, [Whitespace], Maybe (Comment a), Newline)]
-  , _blockHead :: Statement a
-  , _blockTail
-    :: [Either (a, [Whitespace], Maybe (Comment a), Newline) (Statement a)]
-  } deriving (Eq, Show)
-
-instance Functor Block where
-  fmap f (Block a b c) =
-    Block
-      ((\(w, x, y, z) -> (f w, x, over (mapped.mapped) f y, z)) <$> a)
-      (fmap f b)
-      (bimap (\(w, x, y, z) -> (f w, x, over (mapped.mapped) f y, z)) (fmap f) <$> c)
-
-instance Foldable Block where
-  foldMap f (Block a b c) =
-    foldMap (\(w, _, y, _) -> f w <> foldMapOf (folded.folded) f y) a <>
-    foldMap f b <>
-    foldMap
-      (bifoldMap (\(w, _, y, _) -> f w <> foldMapOf (folded.folded) f y) (foldMap f))
-      c
-
-instance Traversable Block where
-  traverse f (Block a b c) =
-    Block <$>
-    traverse
-      (\(w, x, y, z) -> (\w' y' -> (w', x, y', z)) <$> f w <*> traverseOf (traverse.traverse) f y)
-      a <*>
-    traverse f b <*>
-    traverse
-      (bitraverse
-         (\(w, x, y, z) -> (\w' y' -> (w', x, y', z)) <$> f w <*> traverseOf (traverse.traverse) f y)
-         (traverse f))
-      c
-
 data WithItem a
   = WithItem
   { _withItemAnn :: a
@@ -767,11 +755,28 @@ fromIR_subscript s =
       traverse fromIR_expr c <*>
       traverseOf (traverse._2.traverse) fromIR_expr d
 
-fromIR_block :: Block a -> Validation (NonEmpty (IRError a)) (Syntax.Block '[] a)
-fromIR_block (Block a b c) =
-  Syntax.Block a <$>
-  fromIR_statement b <*>
-  traverseOf (traverse.traverse) fromIR_statement c
+fromIR_block
+  :: Block a
+  -> Validation (NonEmpty (IRError a)) (Syntax.Block '[] a)
+fromIR_block s =
+  case s of
+    BlockOne a b c ->
+      (\a' -> Syntax.BlockOne a' b) <$>
+      fromIR_statement a <*>
+      traverseOf (traverse._2.traverse) fromIR_block' c
+    BlockBlank a b c d e ->
+      Syntax.BlockBlank a b c d <$> fromIR_block e
+  where
+    fromIR_block'
+      :: Block' a
+      -> Validation (NonEmpty (IRError a)) (Syntax.Block' '[] a)
+    fromIR_block' (Block'One a b c) =
+      (\a' -> Syntax.Block'One a' b) <$>
+      fromIR_statement a <*>
+      traverseOf (traverse._2.traverse) fromIR_block' c
+    fromIR_block' (Block'Blank a b c d) =
+      Syntax.Block'Blank a b c <$>
+      traverseOf (traverse._2.traverse) fromIR_block' d
 
 fromIR_compFor :: CompFor a -> Validation (NonEmpty (IRError a)) (Syntax.CompFor '[] a)
 fromIR_compFor (CompFor a b c d e) =

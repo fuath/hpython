@@ -48,7 +48,7 @@ import Control.Lens.Cons (snoc, _init)
 import Control.Lens.Fold
   ((^..), (^?), (^?!), folded, allOf, toListOf, anyOf, lengthOf, has)
 import Control.Lens.Getter ((^.), getting, view)
-import Control.Lens.Prism (_Right, _Just)
+import Control.Lens.Prism (_Just)
 import Control.Lens.Review ((#))
 import Control.Lens.Setter ((.~), (%~))
 import Control.Lens.TH (makeLenses)
@@ -531,15 +531,26 @@ validateExprSyntax (Set a b c d) =
   validateWhitespace a d
 
 validateBlockSyntax
-  :: ( AsSyntaxError e v a
-     , Member Indentation v
-     )
+  :: (Member Indentation v, AsSyntaxError e v a)
   => Block v a
   -> ValidateSyntax e (Block (Nub (Syntax ': v)) a)
-validateBlockSyntax (Block x b bs) =
-  Block x <$>
-  validateStatementSyntax b <*>
-  traverseOf (traverse._Right) validateStatementSyntax bs
+validateBlockSyntax (BlockOne a b c) =
+  (\a' -> BlockOne a' b) <$>
+  validateStatementSyntax a <*>
+  traverseOf (traverse._2.traverse) validateBlock'Syntax c
+  where
+    validateBlock'Syntax
+      :: (Member Indentation v, AsSyntaxError e v a)
+      => Block' v a
+      -> ValidateSyntax e (Block' (Nub (Syntax ': v)) a)
+    validateBlock'Syntax (Block'One a b c) =
+      (\a' -> Block'One a' b) <$>
+      validateStatementSyntax a <*>
+      traverseOf (traverse._2.traverse) validateBlock'Syntax c
+    validateBlock'Syntax (Block'Blank a b c d) =
+      Block'Blank a b c <$> traverseOf (traverse._2.traverse) validateBlock'Syntax d
+validateBlockSyntax (BlockBlank a b c d e) =
+  BlockBlank a b c d <$> validateBlockSyntax e
 
 validateSuiteSyntax
   :: ( AsSyntaxError e v a

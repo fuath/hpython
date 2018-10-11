@@ -17,6 +17,7 @@ import Language.Python.Syntax
 -- @
 --
 -- Written without the DSL
+append_to :: Raw Statement
 append_to =
   CompoundStatement $
   Fundef () [] (Indents [] ())
@@ -30,7 +31,7 @@ append_to =
     []
     Nothing
     (SuiteMany () [] Nothing LF $
-     Block []
+     BlockOne
      ( SmallStatements
          (Indents [replicate 4 Space ^. from indentWhitespaces] ())
          (Expr () $
@@ -43,14 +44,20 @@ append_to =
          Nothing
          Nothing
      )
-     [ Right $
-         SmallStatements
+     Nothing
+     (Just
+      ( LF
+      , Just $
+        Block'One
+        (SmallStatements
            (Indents [replicate 4 Space ^. from indentWhitespaces] ())
            (Return () [Space] (Just $ Ident "to"))
            []
            Nothing
-           Nothing
-     ])
+           Nothing)
+        Nothing
+        Nothing)
+      ))
 
 -- |
 -- @
@@ -60,6 +67,7 @@ append_to =
 -- @
 --
 -- Written with the DSL
+append_to' :: Raw Statement
 append_to' =
   def_ "append_to" [ p_ "element", k_ "to" (list_ []) ]
     [ line_ $ call_ ("to" /> "append") [ "element" ]
@@ -76,6 +84,7 @@ append_to' =
 --       go(n-1, n*acc)
 --   return go(n, 1)
 -- @
+fact_tr :: Raw Statement
 fact_tr =
   def_ "fact" [p_ "n"]
   [ line_ $
@@ -92,6 +101,7 @@ fact_tr =
 -- def spin():
 --   spin()
 -- @
+spin :: Raw Statement
 spin = def_ "spin" [] [line_ $ call_ "spin" []]
 
 -- |
@@ -100,12 +110,14 @@ spin = def_ "spin" [] [line_ $ call_ "spin" []]
 --   print("yes")
 --   yes()
 -- @
+yes :: Raw Statement
 yes =
   def_ "yes" []
   [ line_ $ call_ "print" [p_ $ str_ "yes"]
   , line_ $ call_ "yes" []
   ]
 
+everything :: Raw Module
 everything =
   ModuleStatement append_to $
   ModuleBlank () [] Nothing LF $

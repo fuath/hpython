@@ -7,20 +7,14 @@
 {-# language UndecidableInstances #-}
 module Language.Python.Internal.Syntax.Statement where
 
-import Control.Lens.Fold (foldMapOf, folded)
 import Control.Lens.Getter ((^.), to, view)
 import Control.Lens.Plated (Plated(..), gplate)
-import Control.Lens.Prism (_Right)
 import Control.Lens.Setter (over, mapped)
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Traversal (Traversal, traverseOf)
 import Control.Lens.Tuple (_2, _3, _4)
-import Data.Bifoldable (bifoldMap)
-import Data.Bifunctor (bimap)
-import Data.Bitraversable (bitraverse)
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty)
-import Data.Monoid ((<>))
 import GHC.Generics (Generic)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -47,40 +41,57 @@ instance Validated Decorator where; unvalidated = to unsafeCoerce
 class HasStatements s where
   _Statements :: Traversal (s v a) (s '[] a) (Statement v a) (Statement '[] a)
 
+-- | A sequence of blanks lines and block containing one or more statements
 data Block (v :: [*]) a
-  = Block
-  { _blockBlankLines :: [(a, [Whitespace], Maybe (Comment a), Newline)]
-  , _blockHead :: Statement v a
-  , _blockTail :: [Either (a, [Whitespace], Maybe (Comment a), Newline) (Statement v a)]
-  } deriving (Eq, Show)
+  = BlockOne
+      (Statement v a)
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' v a)))
+  | BlockBlank
+      a
+      [Whitespace]
+      (Maybe (Comment a))
+      Newline
+      (Block v a)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
-instance Functor (Block v) where
-  fmap f (Block a b c) =
-    Block
-      ((\(w, x, y, z) -> (f w, x, over (mapped.mapped) f y, z)) <$> a)
-      (fmap f b)
-      (bimap (\(w, x, y, z) -> (f w, x, over (mapped.mapped) f y, z)) (fmap f) <$> c)
+-- | A sequence of blanks lines and block containing zero or more statements
+data Block' (v :: [*]) a
+  = Block'One
+      (Statement v a)
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' v a)))
+  | Block'Blank
+      a
+      [Whitespace]
+      (Maybe (Comment a))
+      (Maybe (Newline, Maybe (Block' v a)))
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
-instance Foldable (Block v) where
-  foldMap f (Block a b c) =
-    foldMap (\(w, _, y, _) -> f w <> foldMapOf (folded.folded) f y) a <>
-    foldMap f b <>
-    foldMap
-      (bifoldMap (\(w, _, y, _) -> f w <> foldMapOf (folded.folded) f y) (foldMap f))
-      c
+instance HasStatements Block' where
+  _Statements f = go
+    where
+      go (Block'One a b c) =
+        (\a' -> Block'One a' b) <$>
+        f a <*>
+        traverseOf (traverse._2.traverse) go c
 
-instance Traversable (Block v) where
-  traverse f (Block a b c) =
-    Block <$>
-    traverse
-      (\(w, x, y, z) -> (\w' y' -> (w', x, y', z)) <$> f w <*> traverseOf (traverse.traverse) f y)
-      a <*>
-    traverse f b <*>
-    traverse
-      (bitraverse
-         (\(w, x, y, z) -> (\w' y' -> (w', x, y', z)) <$> f w <*> traverseOf (traverse.traverse) f y)
-         (traverse f))
-      c
+      go (Block'Blank a b c d) =
+        Block'Blank a b c <$>
+        traverseOf (traverse._2.traverse) go d
+
+instance HasStatements Block where
+  _Statements f = go
+    where
+      go (BlockOne a b c) =
+        (\a' -> BlockOne a' b) <$>
+        f a <*>
+        traverseOf (traverse._2.traverse) (_Statements f) c
+      go (BlockBlank a b c d e) =
+        BlockBlank a b c d <$> go e
+
+instance HasExprs Block where
+  _Exprs = _Statements._Exprs
 
 class HasBlocks s where
   _Blocks :: Traversal (s v a) (s '[] a) (Block v a) (Block '[] a)
@@ -127,10 +138,6 @@ instance HasBlocks CompoundStatement where
     _Blocks fun e
   _Blocks fun (With a b asyncWs c d e) =
     With a b asyncWs c (view unvalidated <$> d) <$> _Blocks fun e
-
-instance HasStatements Block where
-  _Statements f (Block a b c) =
-    Block a <$> f b <*> (traverse._Right) f c
 
 instance HasStatements Suite where
   _Statements _ (SuiteOne a b c d) = pure $ SuiteOne a b (c ^. unvalidated) d
@@ -359,10 +366,6 @@ data CompoundStatement (v :: [*]) a
 
 instance HasExprs ExceptAs where
   _Exprs f (ExceptAs ann e a) = ExceptAs ann <$> f e <*> pure (coerce a)
-
-instance HasExprs Block where
-  _Exprs f (Block a b c) =
-    Block a <$> _Exprs f b <*> (traverse._Right._Exprs) f c
 
 instance HasExprs Suite where
   _Exprs f (SuiteOne a b c d) = (\c' -> SuiteOne a b c' d) <$> _Exprs f c

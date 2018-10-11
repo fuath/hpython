@@ -46,7 +46,7 @@ import Control.Lens.Fold ((^..), toListOf, folded)
 import Control.Lens.Getter ((^.), to, getting, use)
 import Control.Lens.Lens (Lens')
 import Control.Lens.Plated (cosmos)
-import Control.Lens.Prism (_Right, _Just)
+import Control.Lens.Prism (_Just)
 import Control.Lens.Review ((#))
 import Control.Lens.Setter ((%~), (.~), Setter', mapped, over)
 import Control.Lens.TH (makeLenses)
@@ -404,10 +404,23 @@ validateBlockScope
   :: AsScopeError e v a
   => Block v a
   -> ValidateScope a e (Block (Nub (Scope ': v)) a)
-validateBlockScope (Block x b bs) =
-  Block x <$>
-  validateStatementScope b <*>
-  traverseOf (traverse._Right) validateStatementScope bs
+validateBlockScope (BlockOne a b c) =
+  (\a' -> BlockOne a' b) <$>
+  validateStatementScope a <*>
+  traverseOf (traverse._2.traverse) validateBlock'Scope c
+  where
+    validateBlock'Scope
+      :: AsScopeError e v a
+      => Block' v a
+      -> ValidateScope a e (Block' (Nub (Scope ': v)) a)
+    validateBlock'Scope (Block'One a b c) =
+      (\a' -> Block'One a' b) <$>
+      validateStatementScope a <*>
+      traverseOf (traverse._2.traverse) validateBlock'Scope c
+    validateBlock'Scope (Block'Blank a b c d) =
+      Block'Blank a b c <$> traverseOf (traverse._2.traverse) validateBlock'Scope d
+validateBlockScope (BlockBlank a b c d e) =
+  BlockBlank a b c d <$> validateBlockScope e
 
 validateComprehensionScope
   :: AsScopeError e v a

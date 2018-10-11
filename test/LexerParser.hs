@@ -8,6 +8,9 @@ import qualified Data.Text as Text
 import Language.Python.Internal.Render
 import Language.Python.Parse (parseModule, parseStatement, parseExpr)
 
+import Helpers (doTokenize, doTabs)
+import Language.Python.Internal.Lexer (initialSrcInfo)
+
 lexerParserTests :: Group
 lexerParserTests = $$discover
 
@@ -161,8 +164,11 @@ prop_fulltrip_12 =
         , " pass"
         ]
 
+    tks <- doTabs (initialSrcInfo "test") =<< doTokenize str
+    annotateShow tks
     tree <- validation (\e -> annotateShow e *> failure) pure $ parseModule "test" str
-    annotateShow $! tree
+
+    -- annotateShow $! tree
 
     showModule tree === str
 

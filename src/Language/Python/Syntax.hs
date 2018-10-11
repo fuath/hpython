@@ -6,7 +6,6 @@ passing @['line_' 'pass_']@
 -}
 
 {-# language DataKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
 {-# language MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# language LambdaCase #-}
 {-# language RankNTypes #-}
@@ -74,6 +73,7 @@ module Language.Python.Syntax
   , HasAsync(..)
     -- ** Lines of code
   , blank_
+  , cmt_
   , AsLine(..)
   , Line(..)
     -- ** Block bodies
@@ -341,7 +341,7 @@ import Control.Lens.Fold ((^..), (^?), folded)
 import Control.Lens.Getter ((^.))
 import Control.Lens.Iso (from)
 import Control.Lens.Lens (Lens')
-import Control.Lens.Prism (_Right, _Just)
+import Control.Lens.Prism (_Just)
 import Control.Lens.Review ((#))
 import Control.Lens.Setter ((.~), (<>~), (?~), (%~), Setter', over)
 import Control.Lens.Traversal (traverseOf)
@@ -365,14 +365,62 @@ id_ :: String -> Raw Ident
 id_ = fromString
 
 -- | One or more lines of Python code
-newtype Line v a
-  = Line
-  { unLine :: Either (a, [Whitespace], Maybe (Comment a), Newline) (Statement v a)
-  } deriving (Eq, Show)
+data Line v a
+  = LineBlank a [Whitespace] (Maybe (Comment a)) (Maybe Newline)
+  | LineStatement (Statement v a) (Maybe (Comment a)) (Maybe Newline)
+  deriving (Eq, Show)
+
+linesToBlock :: [Raw Line] -> Raw Block
+linesToBlock =
+  over
+    (_Indents.indentsValue)
+    (doIndent $ replicate 4 Space) .
+    go
+  where
+    go :: [Raw Line] -> Raw Block
+    go [] =
+      BlockOne
+        (SmallStatements (Indents mempty ()) (Pass () []) [] Nothing Nothing)
+        Nothing
+        Nothing
+    go (l:ls) =
+      case l of
+        LineBlank a ws cmt nl -> BlockBlank a ws cmt (fromMaybe LF nl) $ go ls
+        LineStatement st cmt nl -> BlockOne st cmt $ go' (fromMaybe LF nl) ls
+
+    go' :: Newline -> [Raw Line] -> Maybe (Newline, Maybe (Block' '[] ()))
+    go' nl [] = Just (nl, Nothing)
+    go' nl (l:ls) =
+      Just
+      ( nl
+      , Just $
+        case l of
+          LineBlank a ws cmt nl' -> Block'Blank a ws cmt $ go' (fromMaybe LF nl') ls
+          LineStatement st cmt nl' -> Block'One st cmt $ go' (fromMaybe LF nl') ls
+      )
+
+blockToLines :: Raw Block -> [Raw Line]
+blockToLines (BlockOne st cmt rest) =
+  LineStatement st cmt (fst <$> rest) :
+  maybe [] (maybe [] block'ToLines . snd) rest
+  where
+    block'ToLines :: Raw Block' -> [Raw Line]
+    block'ToLines (Block'One st cmt rest) =
+      LineStatement st cmt (fst <$> rest) :
+      maybe [] (maybe [] block'ToLines . snd) rest
+    block'ToLines (Block'Blank a ws cmt rest) =
+      LineBlank a ws cmt (fst <$> rest) :
+      maybe [] (maybe [] block'ToLines . snd) rest
+blockToLines (BlockBlank a ws cmt nl rest) =
+  LineBlank a ws cmt (Just nl) : blockToLines rest
 
 -- | Create a blank 'Line'
 blank_ :: Raw Line
-blank_ = Line $ Left ((), [], Nothing, LF)
+blank_ = LineBlank () [] Nothing Nothing
+
+-- | Create a single-line comment
+cmt_ :: String -> Raw Line
+cmt_ s = LineBlank () [] (Just $ MkComment () s) Nothing
 
 -- | Convert some data to a 'Line'
 class AsLine s where
@@ -380,10 +428,13 @@ class AsLine s where
 
 instance AsLine SmallStatement where
   line_ ss =
-    Line . Right $ SmallStatements (Indents [] ()) ss [] Nothing Nothing
+    LineStatement
+      (SmallStatements (Indents [] ()) ss [] Nothing Nothing)
+      Nothing
+      Nothing
 
 instance AsLine CompoundStatement where
-  line_ = Line . Right . CompoundStatement
+  line_ s = LineStatement (CompoundStatement s) Nothing Nothing
 
 instance AsLine If where
   line_ = line_ . (_If #)
@@ -395,16 +446,19 @@ instance AsLine With where
   line_ = line_ . (_With #)
 
 instance AsLine Statement where
-  line_ = Line . Right
+  line_ s = LineStatement s Nothing Nothing
 
 instance AsLine Expr where
   line_ e = line_ $ Expr (e ^. exprAnn) e
 
 instance HasExprs Line where
-  _Exprs f (Line a) = Line <$> (_Right._Exprs) f a
+  _Exprs _ (LineBlank a b c d) = pure $ LineBlank a b c d
+  _Exprs f (LineStatement a b c) =
+    (\a' -> LineStatement a' b c) <$> _Exprs f a
 
 instance HasStatements Line where
-  _Statements f (Line a) = Line <$> _Right f a
+  _Statements _ (LineBlank a b c d) = pure $ LineBlank a b c d
+  _Statements f (LineStatement a b c) = (\a' -> LineStatement a' b c) <$> f a
 
 -- |
 -- @forall ws s. id ~ getBody . flip (setBody ws) s@
@@ -605,7 +659,7 @@ mkSetBody bodyField indentsField ws new code =
     over
       (_Indents.indentsValue)
       ((indentsField code ^. indentsValue <>) . doIndent ws)
-      (SuiteMany () [] Nothing LF $ toBlock new)
+      (SuiteMany () [] Nothing LF $ linesToBlock new)
 
 mkGetBody
   :: HasIndents s
@@ -618,9 +672,7 @@ mkGetBody thing bodyField indentsField code =
   (\case
       SuiteOne _ _ c d ->
         [ line_ $ SmallStatements (Indents [] ()) c [] Nothing d ]
-      SuiteMany _ _ _ _ d ->
-        case d of
-          Block x y z -> fmap (Line . Left) x <> (Line (Right y) : fmap Line z)) $
+      SuiteMany _ _ _ _ d -> blockToLines d) $
   fromMaybe
     (error $ "malformed indentation in " <> thing <> " body")
     (traverseOf _Indents (fmap doDedent . subtractStart (indentsField code)) (bodyField code))
@@ -648,7 +700,7 @@ mkFundef name body =
   , _fdParameters = CommaSepNone
   , _fdRightParenSpaces = []
   , _fdReturnType = Nothing
-  , _fdBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _fdBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 -- |
@@ -1003,21 +1055,6 @@ pos_ = UnOp () (Positive () [])
 compl_ :: Raw Expr -> Raw Expr
 compl_ = UnOp () (Complement () [])
 
-toBlock :: [Raw Line] -> Block '[] ()
-toBlock =
-  over
-    (_Indents.indentsValue)
-    (doIndent $ replicate 4 Space) .
-    go
-  where
-    go [] = Block [] pass_ []
-    go (y:ys) =
-      case unLine y of
-        Left l ->
-          case go ys of
-            Block a b c -> Block (l:a) b c
-        Right st -> Block [] st (unLine <$> ys)
-
 instance HasBody While where
   body = whileBody
   setBody = mkSetBody whileBody _whileIndents
@@ -1031,7 +1068,7 @@ mkWhile cond body =
   , _whileIndents = Indents [] ()
   , _whileWhile = [Space]
   , _whileCond = cond
-  , _whileBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _whileBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 while_ :: Raw Expr -> [Raw Line] -> Raw Statement
@@ -1045,7 +1082,7 @@ mkIf cond body =
   , _ifIndents = Indents [] ()
   , _ifIf = [Space]
   , _ifCond = cond
-  , _ifBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _ifBody = SuiteMany () [] Nothing LF $ linesToBlock body
   , _ifElifs = []
   , _ifElse = Nothing
   }
@@ -1096,7 +1133,7 @@ mkElif cond body =
   { _elifIndents = Indents [] ()
   , _elifElif = [Space]
   , _elifCond = cond
-  , _elifBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _elifBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 elif_ :: Raw Expr -> [Raw Line] -> Raw If -> Raw If
@@ -1108,7 +1145,7 @@ mkElse body =
   MkElse
   { _elseIndents = Indents [] ()
   , _elseElse = []
-  , _elseBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _elseBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 class HasElse s where
@@ -1281,7 +1318,7 @@ mkFor binder collection body =
       fromMaybe
         (CommaSepOne1' (Unit () [] []) Nothing)
         (listToCommaSep1' collection)
-  , _forBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _forBody = SuiteMany () [] Nothing LF $ linesToBlock body
   , _forElse = Nothing
   }
 
@@ -1320,7 +1357,7 @@ mkFinally body =
   MkFinally
   { _finallyIndents = Indents [] ()
   , _finallyFinally = []
-  , _finallyBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _finallyBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 -- | Create a minimal valid 'Except'
@@ -1330,7 +1367,7 @@ mkExcept body =
   { _exceptIndents = Indents [] ()
   , _exceptExcept = []
   , _exceptExceptAs = Nothing
-  , _exceptBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _exceptBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 -- | Create a minimal valid 'TryExcept'
@@ -1340,7 +1377,7 @@ mkTryExcept body except =
   { _teAnn = ()
   , _teIndents = Indents [] ()
   , _teTry = [Space]
-  , _teBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _teBody = SuiteMany () [] Nothing LF $ linesToBlock body
   , _teExcepts = pure except
   , _teElse = Nothing
   , _teFinally = Nothing
@@ -1353,7 +1390,7 @@ mkTryFinally body fBody =
   { _tfAnn = ()
   , _tfIndents = Indents [] ()
   , _tfTry = [Space]
-  , _tfBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _tfBody = SuiteMany () [] Nothing LF $ linesToBlock body
   , _tfFinally = mkFinally fBody
   }
 
@@ -1527,7 +1564,7 @@ mkClassDef name body =
   , _cdClass = Space :| []
   , _cdName = name
   , _cdArguments = Nothing
-  , _cdBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _cdBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 instance HasBody ClassDef where
@@ -1566,7 +1603,7 @@ mkWith items body =
   , _withAsync = Nothing
   , _withWith = [Space]
   , _withItems = listToCommaSep1 items
-  , _withBody = SuiteMany () [] Nothing LF $ toBlock body
+  , _withBody = SuiteMany () [] Nothing LF $ linesToBlock body
   }
 
 -- |

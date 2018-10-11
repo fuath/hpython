@@ -1042,22 +1042,25 @@ renderSmallStatement (From _ ws1 name ws3 ns) =
   renderImportTargets ns
 
 renderBlock :: Block v a -> RenderOutput
-renderBlock (Block a b c) =
-  foldMap
-    (\(_, x, y, z) ->
-        foldMap renderWhitespace x <>
-        foldMap renderComment y <>
-        singleton (renderNewline z))
-    a <>
-  renderStatement b <>
-  foldMap
-    (either
-       (\(_, x, y, z) ->
-          foldMap renderWhitespace x <>
-          foldMap renderComment y <>
-          singleton (renderNewline z))
-        renderStatement)
-    c
+renderBlock (BlockOne a b c) =
+  renderStatement a <>
+  foldMap renderComment b <>
+  foldMap (bifoldMap (singleton . renderNewline) (foldMap renderBlock')) c
+  where
+    renderBlock' :: Block' v a -> RenderOutput
+    renderBlock' (Block'One a b c) =
+      renderStatement a <>
+      foldMap renderComment b <>
+      foldMap (bifoldMap (singleton . renderNewline) (foldMap renderBlock')) c
+    renderBlock' (Block'Blank _ a b c) =
+      foldMap renderWhitespace a <>
+      foldMap renderComment b <>
+      foldMap (bifoldMap (singleton . renderNewline) (foldMap renderBlock')) c
+renderBlock (BlockBlank _ a b c d) =
+  foldMap renderWhitespace a <>
+  foldMap renderComment b <>
+  singleton (renderNewline c) <>
+  renderBlock d
 
 renderSuite :: Suite v a -> RenderOutput
 renderSuite (SuiteMany _ a b c d) =
